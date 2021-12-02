@@ -3,7 +3,7 @@ Chrome comic (Chrome 架构，有助于理解electron)
 google chrome: behind the open source browser project
 - today, most of what we use the web for on a day-to-day basis aren't just web pages, they're applications.
 - people are watching and uploading videos, chatting with each other, playing web-based games, all these things that didn't exist when the first browsers were created.
-- wouldn't it be great, then, to start from scratch, and design something based on the need's of today's users?
+- wouldn't it be great, then, to start from scratch, and design something based on the need's of today's web applications and today's users?
 - first, browsers need to be more stable. when you're writing an important email or editing a document, a browser crash a big deal.
 - browsers also need ti be faster. they need to start faster, load pages faster, and for web apps, javascript itself can be a lot faster.
 - they need to be more secure. given what's known about mass browsers exploits, browsers need architectural changes to disadvantage malware.
