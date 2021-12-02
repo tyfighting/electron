@@ -1,19 +1,135 @@
 Chrome comic (Chrome 架构，有助于理解electron)
 
 - first, browsers need to be more stable. when you're writing an important email or editing a document, a browser crash a big deal.
-- browsers also need ti be faster. they need to start faster, load pages faster, and for web apps, javascript itself can be a lot faster
+- browsers also need ti be faster. they need to start faster, load pages faster, and for web apps, javascript itself can be a lot faster.
 - they need to be more secure. given what's known about mass browsers exploits, browsers need architectural changes to disadvantage malware.
 - and we want browsers to find that sweet spot between too many features and too few, with a clean, simple and efficient user interface.
 - finally, google chrome is a fully open source browser.
-- we want others to adopt ideas from us just as we've adopted good ideas from others
+- we want others to adopt ideas from us just as we've adopted good ideas from others.
 
-part one: stability,testing and the multi-process architecture
-- when we started this project. the gears guys were saying that one of the problems with browsers is that they're inherently single-threaded
+part one: stability,testing and the multi-process architecture.
+- when we started this project. the gears guys were saying that one of the problems with browsers is that they're inherently single-threaded.
 - for example, once you have javascript executing, it's going to keep going, and the browser can't do anything else until javascript returns control to the browser.
-- so develops write apis that are asynchronous and every now and then the browser locks up because javascript is hung up on something
+- so develops write apis that are asynchronous and every now and then the browser locks up because javascript is hung up on something.
 - the gears guys were thinking about a multi-threaded browser, but that led us to talk about, well, instead of multiple threads what if we have multiple processes? each having its own memory and its own copy of the global data structures.
-- we're applying the same kind of process isolation you find in modern operating systems
+- we're applying the same kind of process isolation you find in modern operating systems.
 - so, separate processes rendering separate tabs.
 - and now you have separate javascript threads as well.
-- one tab can be busy, while you're still using all the others
+- one tab can be busy, while you're still using all the others.
 - and if there's a browser bug in the renderer(and our experience is that it's almost impossible to eliminate all bugs), we still only lose the one tab.
+- when one tab goes down you get a 'sad tab' but it doesn't crash the whole browser.
+- and yes.it really looks like this.
+- a multi-process design means using a bit more memory up front. each process has a fixed additional cost.
+- but over time, it will also mean less memory bloat.
+- in a traditional browser.you only have one process and one address space that you keep loading web pages into.
+- when you have too many tabs open, you can close some to free up memory.
+- when you bring in another tab, you use the memory that was previously used.
+- but as time goes on, fragmentation results, little bits of memory still get used even when a tab gets closed.
+- either we have memory that nothing can refer to again, or there's a piece of de-allocated memory we still have pointers to.
+- so when the browser wants to open a new tab, it can't fit it in the existing space.
+- and so the os has to grow the browser's address space.
+- and this problem grows all day, as the lifetime of the browser extends.
+- but when a tab is closed in google chrome , you're ending te whole process.
+- and all that memory gets reclaimed.
+- open a new tab now, and you're starting from scratch.
+- so as you browse, we're creating and destroying processes all the time. if there's a crazy memory leak it won't affect you for that long because you'll probably close the tab at some point and get that memory back.
+- and we're taking it one step future, suppose you navigate from domain A to domain B, there's no need for any relationship between the two sites.
+- so now we can throw away the old rendering engine, the old data structures, the old process.
+- so even within a tab, we can be collecting and tossing out the garbage, recycling the whole process.
+- and just like with your os, you can look under the hood with google chrome's task manager to see what sites are using the most memory. downloading the most bytes, and abusing your cpu.
+- why is this application downloading the entire internet.
+- you can even see plug-ins within the tab, since they appear in chrome's task manage as separate processes.
+- so, when things start freaking out, you'll finally have some insight into who's misbehaving and why and eliminate, placing blame where blame belongs.
+- google chrome is a massive, complicated produce that will need to load billions of different web pages, so testing is critical.
+- fortunately, here at google, we have an equally massive infrastructure for crawling web pages.
+- within 20-30 minutes of each new browser build, we can test it on tens of thousands of different web pages.
+- each week, chrome bot tests millions of pages, giving our developers early results they'd otherwise have to wait until external beta for.
+- the key is catching problems as early as possible, it is less expensive and easier to fix them right away. after a few days it is harder to track them down.
+- and catching them early helps engineers write better code, they say, "oh, this mistake is part of pattern" and the next time, they're less likely to make it.
+- of course, there are billions, maybe trillions of webpages out there. if each build is tested against million sites, which million do we use?
+- fortunately, we have a unique take on this problem also.
+- we already rank pages based on which pages the average user is most likely to visit.
+- at the very least, we'll make sure we won't be broken on the kinds of sites people use on a day-to-day basis.
+- there are several ways we test each check-in, from unit tests of individual pieces of code, to automated UI testing of scripted user actions like "clicked back button... went to page...", to fuzz testing: sending your application random input.
+- in layout testing, webkit found that producing a schematic of what the browser thinks it's displaying is a more precise way to compare layouts than taking screenshots and creating a cryptographic hash.
+- when we started we were passing 23% of webkit's layout tests, moving from there to 99% has been a fun challenge and an interesting example of test-driven design.
+- there are limits to what we can do with automated testing.
+- we can't test websites that require a password, for example.
+- and it's not the same as a human being walking around and misusing things. we are using the browser in the way we've designed it to be used.
+- it's hard to cover 100%, but that's what what we're trying to do.
+- I don't care if there's one fewer cool feature. I just want this product to be rock solid.
+
+part two: speed: webkit and V8
+- webkit is the open source rendering engine we used for google chrome.
+- we were impressed by how fast it is.
+- we also knew there was a team at google working on android and we asked them, "why did you guys use webkit?".
+- they said it uses memory efficiently. was easily adapted to embedded devices, and it was easy for new browser developers to learn to make the code base work.
+- browsers are complex. one of the things done well with webkit is that it's kept simple.
+- because javascript is so important to the web today, we decided it was important to work on building a javascript virtual machine, which is exactly what the V8 team in denmark did.
+- the V8 team are experts at virtual machines. whatever language you want to put into a vm, they can tell you how to write it.
+- virtual machines provide safety and platform independence.
+- but previous virtual machines for javascript were designed for small programs, where the performance and interactivity of the system weren't that important.
+- they just wanted to run some very basic stuff on a webpage.
+- but now, you have web applications like gmail that are using the web browser to its fullest when it comes to dom manipulations and javascript, and that simplistic approach to javascript engines isn't enough anymore.
+- so we started with no code, just some wild ideas about how to make it go really fast, such as introducing hidden class transitions.
+- javascript itself is classless. you can create a new object, dynamically add properties to it and go on.
+- but in v8, as execution goes on, objects that end up with the same properties will share the same hidden class and we can start applying dynamic optimizations based on that.
+- another factor in v8's speed is dynamic code generation.
+- when other javascript engines run. they look at the javascript source code and generate an internal representation of it then can interpret.
+- but when you have to do interpretation. you have to look at the structure of your internal representation over and over again.
+- so instead, V8 looks at the javascript source code and generates machine code that can run directly on the cpu that's running the browser.
+- when you interpret once and compile machines code, then that code is your representation of the javascript source code and it doesn't need to be interpreted, it just runs.
+- finally, the core design flaw of current javascript engines is bad garbage collection behavior.
+- javascript and other modern object-oriented programming languages have automatic memory management.
+- if you don't have a reference to an object anymore, its memory can be reclaimed by the system. that's garbage collection, and its a fairly trivial process.
+- but in existing javascript vertical machines, they use conservative garbage collection, which means that because you don't know exactly where all the pointers are, you start searching through the execution stack to see which words look like pointers. but the ones that sort of look like pointers could also be integers that just happen to have the same address as an object in the object heap.
+- in v8, we are using precise garbage collection, so we know precisely where all of the pointers are on the stack and this givens us several advantages. one is that we can migrate an object to another place and just rewire the pointer.
+- and, because we know precisely where all the pointers are, we can also implement incremental garbage collection.
+- meaning quick garbage collection round-trips that are close to a few milliseconds, compared to processing all 100MB of data which could cause second-long pauses.
+- this means much better interactive performance of web applications, like smoother drag and drops.
+- v8 has a specific api that google chrome uses, but the core part of the engine is independent of the browser.
+- so other browsers can include it, or, if there's another project that javascript can apply to, developers can take v8 by itself.
+- we hope v8's performance will set a new bar, and that the other development teams will continue to improve in this space.
+- because if you look at any other system that's become faster over time. what happens is that you get bigger, better, more inventive apps.
+
+part three: search and the user experience
+- In google chrome, the primary piece of the user interface is the tab.
+- as soon as we started thinking about it that way, the design naturally followed. we began rebuilding the ui so the tabs were on top.
+- we could detach the tabs easily because of the separation of the browser and tab processes. move it from window to window and the tab's state goes with is.
+- and because the tabs are the most important part of the UI, each tab has its own controls.
+- and its own url box.
+- which around here we've been calling the 'omnibox', the omnibox handles far more than just urls, it also offers suggestions for searches, top pages you've visited before, pages you haven't' visited but are popular and more.
+- you have full text search over your history, if you found a good site for digital cameras yesterday, you don't have to bookmark that page. just type digital camera and quickly get back to it.
+- when the team suggested autocompletion in line, I said I hated it when browsers stick all this crap into a location bar as I'm typing, It's never what I want. but, they said, no, no, it'll be fine, trust us and they want on and made it something really compelling... inline completions will never flicker, never flash, It's perfectly, aesthetically non-distracting.
+- plus, it'll only autocomplete to something you've explicitly typed before, and you might go straight to, but never to, and when you search on sites like amazon, wikipedia or even google, the search boxes on those pages are captured on your local system, so you can search those same sites with different terms later on, straight from the address bar, by starting the site's name and processing 'tab'.
+- open a new tab in most browsers today, and you'll get your homepage. some users have a blank page because it opens quickly.
+- but the action of opening a tab is a statement of intent: you want to go someplace!
+- maybe you know where, maybe you don't know and need to search
+- we're going to show a page that is designed to be fast. but also helps you complete that action.
+- our default experience, then, is the new tab page with your nine most visited pages here, and the sites you search on most here.
+- It's the pages you were going to type into the url box anyway. google chrome uses your behavior in the omnibox to feed into that page.
+- you might open it and be, like, what's all stuff doing here? but after a while, you see this page and it's just you, it's your browser
+- google chrome has a privacy mode, you can create an incognito window and nothing that occurs in that window is ever logged on your computer
+- It's a read-only mode: you can still access your bookmarks, but none of your history is saved in the browser, and when you close the window, the cookie from that session are wiped out.
+- want to keep a surprise gift a secret? just continue to browse normally in any other window. there's no concept of a drive-by pop-up in chrome. javascript has no way to force a pop-up into your world. pop-ups are scoped to the tab they came from, and confined there, if it's something you want, though just drag it out and it'll be promoted to its own window.
+- developers call the UI frame of the browser its chrome, we wanted to reduce the chrome of google chrome, in the case of webApps, we've made it so you can launch them in their own streamlined window, without the url box and browser toolbar, we don't want to interrupt anything the user is trying to do. if you can just ignore the browser, we've done a good job.
+
+part four: security, sandboxing and safe browsing
+- malware and phishing are a huge problem for users, affecting trust and confidence in the web, when we started this project, it was a very different landscape from when the other browsers started. 
+- back then, it was about rendering the page and getting the cool things working. there was no monetary incentive to put malware on users' machines. now, malware is very financially driven. it's all about stealing passwords and moving money around. in thinking about security, we began with the assumption that your browser would get compromised, you will eventually encounter malware.
+- with sandboxing, our goal is to prevent malware from installing itself on your computer or using what happens in one tab to affect what happens in another. so, for each of these processes we've stripped away all of their rights. they can compute but they can't write files to your hard drive or read files from sensitive areas like your documents or desktop.
+- or as the sandbox team put it, we've taken this existing process boundary, and mode it into a jail. that means no watching you type your credit card number, no interacting with mouse operations, no reading your tax returns, no telling windows to run an executable at start-up. something bad could be running in this tab, but as soon as you close it , it's gone, no effect on your machine and no effect on other processes. the perimeter of the sandbox is largely based on permissions. vista uses a modified version of the biba security model which has three levels. very trusted, somewhat trusted, not trusted at all.
+- this level is for backup systems, programs that update, etc. this level is for everything the user runs normally. notepad, solitaire, calculator... reading is allowed from low to high, but writing is allowed only from high to low. typically, applications receiving and processing data from the internet are split into the two lower levels. the problem is that unlike the high level, there is a lot of sensitive info here, that this level should not be allowed to read!
+- in our model, there's the user, and there's the sandbox, and any communications must be initiated by the user, this side can reply but it has no way to access anything that isn't explicitly provided by the user. we can do this because all our code is new, we're writing the code, so google chrome has full control over this. with one exception plugins, because webpages are more than just html and javascript.
+- in terms of permissions on the system, google chrome's renderer may run at very low privileges, but there are plugins that run at the same level or even higher than the browser, plugins have capabilities that aren't public standards, so we can't sandbox these yet. though with some small changes on the part of the plugin makers, we can get them to run at a lower privilege which would be much much safer. and meanwhile, we have a huge surface area reduction in valuerability, from all this, to this.
+- when a plugin combines with html and javascript, it all runs in the same process. if any part crashes or starts corrupting memory, they're all hosed. so i worked on ripping plugins out of the rendering process and putting them in a separate process all their own.
+- in that way, the rest of the page can still be sandboxed ,even if the plugin can't be.
+- sandboxing can help protect users from malware, but they can still be tricked by phishing. In a typical phishing scheme, an attacker sands out mail saying, "I'm your bank, your account is compromised, give me your ssn so i can verify, ect..." then they send users to a nearly exact cope of their bank's website and start stealing their information. a lot of these get taken down somewhere around 24 hours, though a few last up to 7 days or more, the hard part is finding them close to time zero.
+- google chrome is continually downloading lists of harmful sites, one for phishing, one for malware. if you go to a website that matches that list, you'll get a warning. we've mode this service freely available, we're happy to give it away, it's a public api. there's a second list of malware websites. websites where a ton of bad things might happen to your computer, just on arrival. when we discover malicious content, we notify the owner of a website, who usually wasn't intending to be malicious, and they can take this information and clean up their site.
+
+part five: gears, standards and open source
+- another thing we built into google chrome is gears, gears basically adds an api to your browser, an extension that improves its capabilities. from my perspective, google chrome and gears are entering the web from two directions. the browser project is an effort to make the web better for users, the gears team wants to make the web better for developers.
+- there are a lot of limitations to the kinds of applications that you can build today with web browsers, and the subset og things you can do is different for each browser, if one browser has a cool feature, that doesn't help, it has to exist across all browsers in order for developers to use it, gears is trying to improve the base functionality of all browsers, including google chrome, whatever the advantages of building native apps over web apps, we want to build those enhancements through gears, and help them make their way into new standards across the web.
+- so, open standards are one way to help all browser get better, the team has also done some interesting things with speed, stability and the ui, like the new tab page, some of these might become standards, some might not, but, since it's open source, other browser developers can take what they want out of it.
+- they don't have to pay us, they don't have to ask our permission, they don't have to share patches or report bugs, though, if they like, we have system in place for that, but they can build on what we've done and bring their own creativity to it, sure, we could ship a proprietary browser and hold it in, but google lives on the internet, it's in our interest to make the internet better and without competition we have stagnation, that's why we're open sourcing the whole thing, we need the internet to be a fair, smart, safe place.
+- as excited as we are about building google chrome, it's important to help all browsers become more powerful, to keep evolving with the web and continuing to build a solid foundation for modern web applications. we owe a great debt to other open source browser projects, especially, mozilla and webkit, this is our contribution, and we hope people will take some of these ideas, too; challenge them, build on them and keep moving the web forward.
